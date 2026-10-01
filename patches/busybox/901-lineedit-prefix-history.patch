@@ -1,0 +1,127 @@
+--- a/libbb/lineedit.c
++++ b/libbb/lineedit.c
+@@ -1454,7 +1454,32 @@
+ 	beep();
+ 	return 0;
+ }
++
++static int get_history_by_prefix(const char *prefix, int direction)
++{
++	int i;
++	int prefix_len = strlen(prefix);
+ 
++	if (!(state->flags & DO_HISTORY))
++		goto not_found;
++	for (i = state->cur_history + direction;
++	     i >= 0 && i <= state->cnt_history;
++	     i += direction) {
++		/* The last slot holds the line typed before browsing history. */
++		if (i == state->cnt_history
++		 || (state->history[i]
++		  && strncmp(state->history[i], prefix, prefix_len) == 0)
++		) {
++			save_command_ps_at_cur_history();
++			state->cur_history = i;
++			return 1;
++		}
++	}
++ not_found:
++	beep();
++	return 0;
++}
++
+ /* Lists command history. Used by shell 'history' builtins */
+ void FAST_FUNC show_history(const line_input_t *st)
+ {
+@@ -2464,6 +2489,9 @@
+ {
+ 	int len, n;
+ 	int timeout;
++#if MAX_HISTORY > 0
++	char *history_prefix = NULL;
++#endif
+ #if ENABLE_FEATURE_TAB_COMPLETION
+ 	smallint lastWasTab = 0;
+ #endif
+@@ -2587,6 +2615,33 @@
+ 			/* btw, since KEYCODE_xxx are all < 0, this doesn't
+ 			 * change ic if it contains one of them: */
+ 			ic |= VI_CMDMODE_BIT;
++		}
++#endif
++
++#if MAX_HISTORY > 0
++		/* Cursor movement keeps the active search; editing starts a new one. */
++		if (history_prefix) {
++			switch (ic) {
++			case KEYCODE_UP:
++			case KEYCODE_DOWN:
++			case KEYCODE_LEFT:
++			case KEYCODE_RIGHT:
++			case KEYCODE_HOME:
++			case KEYCODE_END:
++			case KEYCODE_CTRL_LEFT:
++			case KEYCODE_CTRL_RIGHT:
++			case KEYCODE_ALT_LEFT:
++			case KEYCODE_ALT_RIGHT:
++			case CTRL('A'):
++			case CTRL('B'):
++			case CTRL('E'):
++			case CTRL('F'):
++			case CTRL('L'):
++				break;
++			default:
++				free(history_prefix);
++				history_prefix = NULL;
++			}
+ 		}
+ #endif
+ 
+@@ -2850,12 +2905,33 @@
+ 
+ #if MAX_HISTORY > 0
+ 		case KEYCODE_UP:
+-			if (get_previous_history())
++			if (!history_prefix) {
++# if ENABLE_UNICODE_SUPPORT
++				char buf[MAX_LINELEN];
++				save_string(buf, sizeof(buf));
++				history_prefix = xstrdup(buf);
++# else
++				history_prefix = xstrdup(command_ps);
++# endif
++			}
++			if (history_prefix[0]
++			 ? get_history_by_prefix(history_prefix, -1)
++			 : get_previous_history())
+ 				goto rewrite_line;
+-			beep();
+ 			break;
+ 		case KEYCODE_DOWN:
+-			if (!get_next_history())
++			if (!history_prefix) {
++# if ENABLE_UNICODE_SUPPORT
++				char buf[MAX_LINELEN];
++				save_string(buf, sizeof(buf));
++				history_prefix = xstrdup(buf);
++# else
++				history_prefix = xstrdup(command_ps);
++# endif
++			}
++			if (!(history_prefix[0]
++			 ? get_history_by_prefix(history_prefix, 1)
++			 : get_next_history()))
+ 				break;
+  rewrite_line:
+ 			/* Rewrite the line with the selected history item */
+@@ -2972,6 +3048,10 @@
+ #endif
+ 	} /* while (1) */
+ 
++#if MAX_HISTORY > 0
++	free(history_prefix);
++#endif
++
+ #if ENABLE_FEATURE_EDITING_ASK_TERMINAL
+ 	if (S.sent_ESC_br6n) {
+ 		/* "sleep 1; busybox ash" + hold [Enter] to trigger.

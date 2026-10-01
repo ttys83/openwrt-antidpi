@@ -1,0 +1,36 @@
+#!/bin/sh
+set -e
+
+key_file=/usr/share/openwrt-custom/ssh_key.pub
+authorized_keys=/etc/dropbear/authorized_keys
+key=$(cat "$key_file")
+
+umask 077
+mkdir -p /etc/dropbear
+touch "$authorized_keys"
+if ! grep -Fqx "$key" "$authorized_keys"; then
+    printf '%s\n' "$key" >> "$authorized_keys"
+fi
+chmod 0600 "$authorized_keys"
+
+if ! uci -q get 'dropbear.@dropbear[0]' >/dev/null; then
+    uci add dropbear dropbear >/dev/null
+fi
+uci set 'dropbear.@dropbear[0].DirectInterface=lan'
+uci set 'dropbear.wan_key_only=dropbear'
+uci set 'dropbear.wan_key_only.enable=1'
+uci set 'dropbear.wan_key_only.DirectInterface=wan'
+uci set 'dropbear.wan_key_only.Port=21022'
+uci set 'dropbear.wan_key_only.PasswordAuth=0'
+uci set 'dropbear.wan_key_only.RootPasswordAuth=0'
+uci set 'dropbear.wan_key_only.RootLogin=1'
+uci commit dropbear
+
+uci set 'firewall.allow_ssh_wan_21022=rule'
+uci set 'firewall.allow_ssh_wan_21022.name=Allow-SSH-WAN-21022'
+uci set 'firewall.allow_ssh_wan_21022.src=wan'
+uci set 'firewall.allow_ssh_wan_21022.proto=tcp'
+uci set 'firewall.allow_ssh_wan_21022.dest_port=21022'
+uci set 'firewall.allow_ssh_wan_21022.family=ipv4'
+uci set 'firewall.allow_ssh_wan_21022.target=ACCEPT'
+uci commit firewall

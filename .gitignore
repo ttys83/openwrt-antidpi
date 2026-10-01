@@ -1,0 +1,6 @@
+/build/
+/output/
+.DS_Store
+
+# Local SSH public key embedded in the firmware
+/overlay/usr/share/openwrt-custom/ssh_key.pub
