@@ -36,6 +36,7 @@ unsquashfs -no-progress -d "$check_dir/root" "$check_dir/rootfs.squashfs" \
     bin/busybox \
     etc/config/zapret2 \
     etc/config/https-dns-proxy \
+    etc/config/passwall2 \
     etc/uci-defaults/90-ssh-wan \
     etc/uci-defaults/luci-app-passwall2 \
     etc/profile.d/90-color-prompt.sh \
@@ -55,6 +56,7 @@ unsquashfs -no-progress -d "$check_dir/root" "$check_dir/rootfs.squashfs" \
 for file in \
     etc/config/zapret2 \
     etc/config/https-dns-proxy \
+    etc/config/passwall2 \
     etc/uci-defaults/90-ssh-wan \
     etc/profile.d/90-color-prompt.sh \
     opt/zapret2/init.d/openwrt/custom.d/50-discord_media.sh \
@@ -71,6 +73,28 @@ test -f "$check_dir/root/etc/init.d/passwall2"
 test -x "$check_dir/root/usr/bin/xray"
 test -x "$check_dir/root/usr/sbin/dnsmasq"
 grep -q "option enabled '0'" "$check_dir/root/usr/share/passwall2/0_default_config"
+passwall_config="$check_dir/root/etc/config/passwall2"
+test "$(grep -c '^config shunt_rules ' "$passwall_config")" -eq 3
+for rule in Telegram Meta OpenAI; do
+    grep -qx "config shunt_rules '$rule'" "$passwall_config"
+done
+for setting in \
+    "enabled '0'" \
+    "node 'rulenode'" \
+    "type 'Xray'" \
+    "protocol '_shunt'" \
+    "default_node '_direct'" \
+    "direct_dns_protocol 'udp'" \
+    "direct_dns '127.0.0.1:5053'" \
+    "remote_dns_protocol 'udp'" \
+    "remote_dns '127.0.0.1:5054'" \
+    "remote_dns_detour 'direct'"; do
+    grep -qx "[[:space:]]*option $setting" "$passwall_config"
+done
+if grep -Eq 'examplenode|passwall2\.github|option (PrivateIP|shunt_group|group) ' "$passwall_config"; then
+    echo 'Unexpected default node or shunt rule group in Passwall2 config' >&2
+    exit 1
+fi
 grep -aq 'nftset' "$check_dir/root/usr/sbin/dnsmasq"
 for module in nf_conntrack_netlink nf_socket_ipv4 nf_socket_ipv6 \
     nf_tproxy_ipv4 nf_tproxy_ipv6 nft_nat nft_socket nft_tproxy; do
