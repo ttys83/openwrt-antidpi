@@ -1,0 +1,77 @@
+# Разрешения на команды для проекта OpenWRT_custom.
+# Документация: https://learn.chatgpt.com/docs/agent-configuration/rules
+#
+# Раскомментируйте нужные примеры или добавьте свои prefix_rule(...).
+# pattern — префикс команды, разбитый на аргументы; это не glob/regex.
+# allow — разрешить выполнение вне sandbox без запроса.
+# prompt — запрашивать подтверждение.
+# forbidden — запретить выполнение.
+# При нескольких совпадениях: forbidden > prompt > allow.
+#
+# Ниже активны переносимые разрешения для диагностики Docker.
+# Правила загружаются после перезапуска Codex для доверенного проекта.
+# Настройки sandbox и управляемые ограничения действуют отдельно.
+
+# Просмотр состояния Docker без изменения контейнеров и образов.
+prefix_rule(
+    pattern = ["docker", ["version", "info", "ps", "images"]],
+    decision = "allow",
+    justification = "Просмотр версии, состояния Docker, контейнеров и образов.",
+    match = [
+        "docker version",
+        "docker info",
+        "docker ps -a",
+        "docker images",
+    ],
+    not_match = [
+        "docker system prune -af",
+        "docker run --privileged alpine",
+        "docker exec container sh",
+    ],
+)
+
+prefix_rule(
+    pattern = ["docker", ["image", "container"], ["ls", "inspect"]],
+    decision = "allow",
+    justification = "Просмотр списка и метаданных образов и контейнеров.",
+    match = [
+        "docker image ls",
+        "docker image inspect openwrt-custom-imagebuilder:25.12.5",
+        "docker container ls -a",
+        "docker container inspect openwrt-builder",
+    ],
+    not_match = [
+        "docker image rm openwrt-custom-imagebuilder:25.12.5",
+        "docker container rm openwrt-builder",
+    ],
+)
+
+# Разрешения с абсолютными путями находятся в local.rules (исключён из Git).
+# На другом компьютере создайте local.rules с его путём проекта.
+
+# Общих разрешений для docker build/run/exec нет.
+# Сборки с записью в проект или output/ используют обычный процесс подтверждения.
+
+# Пример: разрешить просмотр статуса Git.
+# prefix_rule(
+#     pattern = ["git", "status"],
+#     decision = "allow",
+#     match = ["git status --short"],
+#     not_match = ["git reset --hard"],
+# )
+
+# Пример: запрашивать подтверждение для сборки прошивки.
+# prefix_rule(
+#     pattern = ["sh", "scripts/build-image.sh"],
+#     decision = "prompt",
+#     justification = "Сборка скачивает исходники и запускает Docker.",
+#     match = ["sh scripts/build-image.sh"],
+# )
+
+# Пример: запретить принудительный сброс изменений Git.
+# prefix_rule(
+#     pattern = ["git", "reset", "--hard"],
+#     decision = "forbidden",
+#     justification = "Сохраните локальные изменения перед сбросом.",
+#     match = ["git reset --hard HEAD"],
+# )

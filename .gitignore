@@ -4,3 +4,6 @@
 
 # Local SSH public key embedded in the firmware
 /overlay/usr/share/openwrt-custom/ssh_key.pub
+
+# Machine-specific Codex command permissions
+/.codex/rules/local.rules
